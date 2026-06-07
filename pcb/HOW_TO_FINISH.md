@@ -35,8 +35,8 @@ Track** (`X`). Default trace width is 0.25 mm for signals, 0.5 mm for power.
 |---|---|---|---|---|
 | 1 | COL0 | J1 pad 1 — (−7.62, −32.62) | Top of COL0 trunk — (−31.525, −6.525) | F.Cu, lane Y = −20 |
 | 2 | COL1 | J1 pad 2 — (−7.62, −30.08) | Top of COL1 trunk — (−12.475, −6.525) | F.Cu, lane Y = −18.5 |
-| 3 | ROW0 | J1 pad 7 — (−7.62, −17.38) | Leftmost cathode area — (−29.525, −10.025) | B.Cu via at pin; lane via left of XIAO |
-| 4 | ROW1 | J2 pad 4 — (7.62, −22.96) | Rightmost cathode — (−6.665, 8.95) | B.Cu via at pin; cross between matrix and encoder |
+| 3 | ROW0 | J1 pad 7 — (−7.62, −17.38) | Left end of ROW0 trunk — (−29.715, −11.025) | B.Cu via at pin; lane via left of XIAO |
+| 4 | ROW1 | J2 pad 4 — (7.62, −25.0) | Right end of ROW1 trunk — (−6.665, 8.025) | B.Cu via at pin; cross between matrix and encoder |
 | 5 | ENC_A | J1 pad 3 — (−7.62, −27.54) | Encoder pad A — (22, 14) | F.Cu, route around top of matrix |
 | 6 | ENC_B | J1 pad 4 — (−7.62, −25.0) | Encoder pad B — (22, 19) | F.Cu, parallel to ENC_A |
 | 7 | ENC_PUSH | J2 pad 3 — (7.62, −27.54) | Encoder pad S1 — (36.5, 19) | F.Cu, straight right |
