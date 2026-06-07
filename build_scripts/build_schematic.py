@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a clean schematic diagram of the Hackpad using schemdraw.
+"""Build a clean schematic diagram of the Hackpad v2 using schemdraw.
 
-Produces assets/schematic.png (and .svg) showing the XIAO RP2040, the 2x2
-key matrix with diodes, the EC11 rotary encoder with push-switch, and the
-0.91" OLED display with their actual electrical connections.
+Produces assets/schematic.{svg,png} — XIAO RP2040 with every pin labeled,
+4x3 switch+diode matrix, EC11 rotary encoder, and 0.91" OLED with their
+electrical connections.
 """
 
 import os
@@ -18,14 +18,10 @@ os.makedirs(ASSETS, exist_ok=True)
 schemdraw.config(font='sans-serif', fontsize=11)
 
 
-def label_at(d, xy, text, halign='left'):
-    d.add(elm.Label().at(xy).label(text, halign=halign))
-
-
 def build():
     d = schemdraw.Drawing(canvas='svg')
 
-    # ====================== XIAO RP2040 IC block ======================
+    # ======= XIAO RP2040 IC block =======
     xiao = elm.Ic(
         pins=[
             elm.IcPin(name='D0/GP26',  side='left',  pin='1',  anchorname='D0'),
@@ -48,37 +44,36 @@ def build():
     )
     d.add(xiao.at((0, 0)))
 
-    # Power flags on XIAO
+    # Power flags
     d.add(elm.Vdd().at(xiao.V5).label('+5V', loc='right'))
     d.add(elm.Vdd().at(xiao.V3).label('+3V3', loc='right'))
     d.add(elm.Ground().at(xiao.GND))
 
-    # XIAO signal labels (stub + label, NO redundant logical wire)
+    # XIAO signal labels
     for pin, signal, side in [
-        ('D0', 'COL0',     'left'),  ('D1',  'COL1',     'left'),
-        ('D2', 'ENC_A',    'left'),  ('D3',  'ENC_B',    'left'),
-        ('D4', 'I2C_SDA',  'left'),  ('D5',  'I2C_SCL',  'left'),
-        ('D6', 'ROW0',     'left'),
-        ('D7', 'ROW1',     'right'), ('D8',  'ENC_PUSH', 'right'),
-        ('D10','RGB_DIN',  'right'),
+        ('D0', 'COL0',    'left'),  ('D1',  'COL1',    'left'),
+        ('D2', 'COL2',    'left'),  ('D3',  'COL3',    'left'),
+        ('D4', 'I2C_SDA', 'left'),  ('D5',  'I2C_SCL', 'left'),
+        ('D6', 'ROW0',    'left'),
+        ('D7', 'ROW1',    'right'), ('D8',  'ROW2',    'right'),
+        ('D9', 'ENC_A',   'right'), ('D10', 'ENC_B',   'right'),
     ]:
         anchor = getattr(xiao, pin)
         line = elm.Line().left().length(0.8) if side == 'left' else elm.Line().right().length(0.8)
         d.add(line.at(anchor).label(signal, loc=side))
 
-    # ====================== Switch matrix (2x2) + diodes ======================
-    # Lay out 4 switch+diode pairs on a 2x2 grid to the right of the XIAO.
+    # ======= 4x3 matrix (12 switches + 12 diodes) =======
     grid_origin_x = 8.5
-    grid_origin_y = 1.5
+    grid_origin_y = 2.5
     col_pitch = 3.5
-    row_pitch = 2.6
+    row_pitch = 2.5
 
-    cathode_pts = {}   # diode cathode position per (row, col)
-    switch_a_pts = {}  # switch pad A position per (row, col)
+    cathode_pts = {}
+    switch_a_pts = {}
 
-    for row in range(2):
-        for col in range(2):
-            idx = row * 2 + col + 1
+    for row in range(3):
+        for col in range(4):
+            idx = row * 4 + col + 1
             sx = grid_origin_x + col * col_pitch
             sy = grid_origin_y - row * row_pitch
             sw = d.add(elm.Switch().right().at((sx, sy)).label(f'SW{idx}', loc='top'))
@@ -86,68 +81,57 @@ def build():
             switch_a_pts[(row, col)] = sw.start
             cathode_pts[(row, col)] = di.end
 
-    # COL buses: vertical line at the LEFT of each column connects pad A's.
-    col_x_bus = [grid_origin_x - 0.5, grid_origin_x + col_pitch - 0.5]
-    for col in range(2):
-        # Bus line spans both rows + a bit above/below
+    # COL buses (vertical, left of leftmost switch)
+    col_x_bus = [grid_origin_x - 0.5 + c * col_pitch for c in range(4)]
+    for col in range(4):
         ytop = grid_origin_y + 1.0
-        ybot = grid_origin_y - row_pitch - 0.5
+        ybot = grid_origin_y - 2 * row_pitch - 0.5
         d.add(elm.Line().at((col_x_bus[col], ytop)).to((col_x_bus[col], ybot)))
         d.add(elm.Label().at((col_x_bus[col], ytop + 0.3)).label(f'COL{col}'))
-        for row in range(2):
+        for row in range(3):
             a = switch_a_pts[(row, col)]
             d.add(elm.Line().at(a).to((col_x_bus[col], a.y)))
             d.add(elm.Dot().at((col_x_bus[col], a.y)))
 
-    # ROW buses: horizontal line at the RIGHT of each row connects cathodes.
-    row_y_bus = [grid_origin_y + 1.4, grid_origin_y - row_pitch + 1.4]
-    for row in range(2):
-        xs = [cathode_pts[(row, c)].x for c in range(2)]
+    # ROW buses (horizontal, right of rightmost cathode in row)
+    for row in range(3):
+        xs = [cathode_pts[(row, c)].x for c in range(4)]
+        bus_y = grid_origin_y - row * row_pitch + 1.4
         xleft = min(xs) - 0.4
         xright = max(xs) + 0.8
-        d.add(elm.Line().at((xleft, row_y_bus[row])).to((xright, row_y_bus[row])))
-        d.add(elm.Label().at((xright + 0.5, row_y_bus[row])).label(f'ROW{row}'))
-        for col in range(2):
+        d.add(elm.Line().at((xleft, bus_y)).to((xright, bus_y)))
+        d.add(elm.Label().at((xright + 0.6, bus_y)).label(f'ROW{row}'))
+        for col in range(4):
             c = cathode_pts[(row, col)]
-            d.add(elm.Line().at(c).to((c.x, row_y_bus[row])))
-            d.add(elm.Dot().at((c.x, row_y_bus[row])))
+            d.add(elm.Line().at(c).to((c.x, bus_y)))
+            d.add(elm.Dot().at((c.x, bus_y)))
 
-    # ====================== EC11 rotary encoder + push-switch ======================
-    enc_x, enc_y = 9.0, -4.5
-    enc = elm.RBox(w=3.2, h=2.4)
-    d.add(enc.at((enc_x, enc_y)).label('EC11\nENC1', loc='center'))
-    # Left side: A, C(GND), B
-    for off, name, lab in [(0.7, 'A', 'ENC_A'), (0.0, 'C', 'GND'), (-0.7, 'B', 'ENC_B')]:
-        x0 = enc_x - 1.6  # left edge of box
+    # ======= EC11 encoder =======
+    enc_x, enc_y = 11.0, -7.5
+    d.add(elm.RBox(w=3.2, h=2.0).at((enc_x, enc_y)).label('EC11\nENC1', loc='center'))
+    for off, name, lab in [(0.5, 'A', 'ENC_A'), (0.0, 'C', 'GND'), (-0.5, 'B', 'ENC_B')]:
+        x0 = enc_x - 1.6
         y0 = enc_y + off
         d.add(elm.Line().at((x0, y0)).to((x0 - 0.8, y0)))
         d.add(elm.Label().at((x0 - 0.8, y0)).label(lab, loc='left'))
         d.add(elm.Label().at((x0 + 0.15, y0)).label(name, loc='right'))
-    # Right side: S1, S2 (push-switch)
-    for off, name, lab in [(0.5, 'S1', 'ENC_PUSH'), (-0.5, 'S2', 'GND')]:
-        x0 = enc_x + 1.6
-        y0 = enc_y + off
-        d.add(elm.Line().at((x0, y0)).to((x0 + 0.8, y0)))
-        d.add(elm.Label().at((x0 + 0.8, y0)).label(lab, loc='right'))
-        d.add(elm.Label().at((x0 - 0.15, y0)).label(name, loc='left'))
 
-    # ====================== OLED display (4-pin header) ======================
-    oled_x, oled_y = 9.0, -8.5
-    oled = elm.RBox(w=3.2, h=2.4)
-    d.add(oled.at((oled_x, oled_y)).label('0.91"\nSSD1306\n128x32\nJ3', loc='center'))
-    for off, name, lab in [(0.9, 'GND', 'GND'),
-                            (0.3, 'VCC', '+5V'),
-                            (-0.3, 'SCL', 'I2C_SCL'),
-                            (-0.9, 'SDA', 'I2C_SDA')]:
+    # ======= OLED display =======
+    oled_x, oled_y = 16.5, -7.5
+    d.add(elm.RBox(w=3.2, h=2.6).at((oled_x, oled_y)).label('0.91"\nSSD1306\n128x32\nJ3', loc='center'))
+    for off, name, lab in [(1.0, 'GND', 'GND'),
+                            (0.35, 'VCC', '+5V'),
+                            (-0.35, 'SCL', 'I2C_SCL'),
+                            (-1.0, 'SDA', 'I2C_SDA')]:
         x0 = oled_x - 1.6
         y0 = oled_y + off
         d.add(elm.Line().at((x0, y0)).to((x0 - 0.8, y0)))
         d.add(elm.Label().at((x0 - 0.8, y0)).label(lab, loc='left'))
         d.add(elm.Label().at((x0 + 0.15, y0)).label(name, loc='right'))
 
-    # ====================== Title ======================
-    d.add(elm.Label().at((6, 5.0)).label('Hackpad — 4-key + Encoder + OLED Macropad', halign='center'))
-    d.add(elm.Label().at((6, 4.5)).label('Schematic v1.0 (XIAO RP2040, KMK firmware)', halign='center'))
+    # ======= Title =======
+    d.add(elm.Label().at((10, 6.0)).label('Hackpad v2 — 12-key + Encoder + OLED Macropad', halign='center'))
+    d.add(elm.Label().at((10, 5.4)).label('Schematic (XIAO RP2040, KMK firmware)', halign='center'))
 
     svg_path = os.path.join(ASSETS, 'schematic.svg')
     png_path = os.path.join(ASSETS, 'schematic.png')
@@ -155,10 +139,10 @@ def build():
     print(f'Wrote {svg_path}')
     try:
         import cairosvg
-        cairosvg.svg2png(url=svg_path, write_to=png_path, output_width=1800)
+        cairosvg.svg2png(url=svg_path, write_to=png_path, output_width=2000)
         print(f'Wrote {png_path}')
     except Exception as e:
-        print(f'PNG export skipped (cairosvg not installed): {e}')
+        print(f'PNG export skipped: {e}')
 
 
 if __name__ == '__main__':

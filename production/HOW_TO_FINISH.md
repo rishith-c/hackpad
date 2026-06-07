@@ -1,90 +1,80 @@
-# HOW TO FINISH: ~11 trace pulls in KiCad
+# HOW TO FINISH: 11 trace pulls in KiCad
 
-The `.kicad_pro`, `.kicad_sch`, and `.kicad_pcb` are all included, the matrix
-is fully routed in copper, and `production/gerbers.zip` was exported directly
-from this `.kicad_pcb` — DRC passes at error level. **The board will fab
-as-is, but the connections below need to be pulled in KiCad before the board
-will actually do anything past the matrix.**
+The `.kicad_pro`, `.kicad_sch`, and `.kicad_pcb` are all included, the
+12-key matrix is fully routed in copper, and `production/gerbers.zip` was
+exported directly from this `.kicad_pcb` — DRC passes at error level. **The
+board will fab as-is, but the connections below need to be pulled in KiCad
+before the board will actually do anything past the matrix.**
 
-If you'd rather regenerate everything: re-run [`build_scripts/build_pcb.py`](../build_scripts/build_pcb.py)
-with KiCad 9's bundled Python.
+If you'd rather regenerate everything: re-run
+[`build_scripts/build_pcb.py`](../build_scripts/build_pcb.py) with KiCad 9's
+bundled Python.
 
 ## What's already routed (don't touch)
 
-- 4 MX switches + 4 1N4148 diodes placed in a 2×2 grid (19.05 mm pitch).
-- COL0..COL1 trunks on F.Cu (vertical, one per column).
-- ROW0..ROW1 trunks on B.Cu (horizontal, 1.5 mm above the diode pad row)
-  with cathode-to-trunk tabs.
-- Switch pad B → diode anode bridges on F.Cu (short L behind each switch).
-- Edge cuts: 90 × 70 mm rounded rectangle, 3 mm corner radius.
-- GND pour on B.Cu with thermal reliefs (GND auto-connects every pad on the
-  GND net through the pour).
-- M3 mounting holes at (±40, ±30).
-- XIAO socket: two `PinHeader_1x07_P2.54mm_Vertical` at X = ±7.62, top of
-  board, USB-C facing the top edge.
-- OLED socket: `PinHeader_1x04_P2.54mm_Vertical` rotated 90°, centered on
-  (24, −25). Pad order from −X to +X: GND, VCC, SCL, SDA.
-- EC11 encoder at (22, 14).
+- 12 MX switches + 12 1N4148 diodes placed in a 4×3 grid (19.05 mm pitch).
+- COL0..COL3 trunks on **F.Cu** (vertical, one per column, from Y = −9 down
+  through every switch in the column).
+- ROW0..ROW2 trunks on **B.Cu** (horizontal, 1.5 mm above the diode pad row)
+  with short cathode-to-trunk tabs.
+- Switch pad B → diode anode bridges on **F.Cu** (short L behind each switch).
+- Edge cuts: 95 × 95 mm rounded rectangle, 3 mm corner radius.
+- GND pour on **B.Cu** with thermal reliefs — auto-connects every GND pad.
+- M3 mounting holes at (±42, ±42).
+- XIAO socket: two `PinHeader_1x07_P2.54mm_Vertical` at X = ±7.62, top-center,
+  USB-C facing the top edge.
+- OLED socket: `PinHeader_1x04_P2.54mm_Vertical` rotated 90°, GND end at
+  (−29.81, −36). Pad order from −X to +X: GND, VCC, SCL, SDA.
+- EC11 rotary encoder at (30, −28). Pads A, C(GND), B sit at X = 30,
+  Y = −28 / −25.5 / −23. C (common) is already on the GND pour.
+- Silkscreen branding ("HACKPAD" v2.0 on the front, repo URL on the back).
 
-## What you finish in KiCad (~11 traces, ~5 min)
+## What you finish in KiCad (11 traces, ~5 min)
 
-Open [`pcb/hackpad.kicad_pcb`](hackpad.kicad_pcb). Switch to **Route > Single
-Track** (`X`). Default trace width is 0.25 mm for signals, 0.5 mm for power.
+Open [`pcb/hackpad.kicad_pcb`](hackpad.kicad_pcb). Switch to
+**Route > Single Track** (`X`). Default trace width is 0.25 mm for
+signals, 0.5 mm for power.
 
-| # | Net | From (XIAO pin) | To (target) | Notes |
+| # | Net | From (XIAO pin) | To | Notes |
 |---|---|---|---|---|
-| 1 | COL0 | J1 pad 1 — (−7.62, −32.62) | Top of COL0 trunk — (−31.525, −6.525) | F.Cu, lane Y = −20 |
-| 2 | COL1 | J1 pad 2 — (−7.62, −30.08) | Top of COL1 trunk — (−12.475, −6.525) | F.Cu, lane Y = −18.5 |
-| 3 | ROW0 | J1 pad 7 — (−7.62, −17.38) | Left end of ROW0 trunk — (−29.715, −11.025) | B.Cu via at pin; lane via left of XIAO |
-| 4 | ROW1 | J2 pad 4 — (7.62, −25.0) | Right end of ROW1 trunk — (−6.665, 8.025) | B.Cu via at pin; cross between matrix and encoder |
-| 5 | ENC_A | J1 pad 3 — (−7.62, −27.54) | Encoder pad A — (22, 14) | F.Cu, route around top of matrix |
-| 6 | ENC_B | J1 pad 4 — (−7.62, −25.0) | Encoder pad B — (22, 19) | F.Cu, parallel to ENC_A |
-| 7 | ENC_PUSH | J2 pad 3 — (7.62, −27.54) | Encoder pad S1 — (36.5, 19) | F.Cu, straight right |
-| 8 | I2C_SDA | J1 pad 5 — (−7.62, −22.46) | OLED pad 4 — (27.81, −25) | F.Cu, lane Y = −19 |
-| 9 | I2C_SCL | J1 pad 6 — (−7.62, −19.92) | OLED pad 3 — (25.27, −25) | F.Cu, lane Y = −20.5 |
-| 10 | VCC_5V | J2 pad 7 — (7.62, −17.38) | OLED pad 2 — (22.73, −25) | F.Cu, **0.5 mm** wide, lane Y = −18 |
-| 11 | RGB_DIN | J2 pad 1 — (7.62, −32.62) | (off-board / hand-wired) | optional — see "Optional RGB" |
+| 1 | COL0 | J1 pad 1 — (−7.62, −45.62) | Top of COL0 trunk — (−28.575, −9) | F.Cu, longest fanout |
+| 2 | COL1 | J1 pad 2 — (−7.62, −43.08) | Top of COL1 trunk — (−9.525, −9) | F.Cu |
+| 3 | COL2 | J1 pad 3 — (−7.62, −40.54) | Top of COL2 trunk — (9.525, −9) | F.Cu, must dodge XIAO right pins |
+| 4 | COL3 | J1 pad 4 — (−7.62, −38.00) | Top of COL3 trunk — (28.575, −9) | F.Cu, must dodge XIAO right pins + encoder |
+| 5 | I2C_SDA | J1 pad 5 — (−7.62, −35.46) | OLED pad 4 — (−22.19, −36) | F.Cu, short hop left |
+| 6 | I2C_SCL | J1 pad 6 — (−7.62, −32.92) | OLED pad 3 — (−24.73, −36) | F.Cu, parallel to SDA |
+| 7 | ROW0 | J1 pad 7 — (−7.62, −30.38) | Left end of ROW0 trunk — (−26.765, −13.5) | B.Cu via at pin; cleanest on B.Cu under everything |
+| 8 | ROW1 | J2 pad 4 — (7.62, −38.00) | Right end of ROW1 trunk — (34.385, 5.55) | B.Cu via at pin; route through right gutter |
+| 9 | ROW2 | J2 pad 3 — (7.62, −40.54) | Right end of ROW2 trunk — (34.385, 24.6) | B.Cu, right gutter, different lane than ROW1 |
+| 10 | ENC_A | J2 pad 2 — (7.62, −43.08) | Encoder pad A — (30, −28) | F.Cu, short hop right |
+| 11 | ENC_B | J2 pad 1 — (7.62, −45.62) | Encoder pad B — (30, −23) | F.Cu, parallel to ENC_A |
+| 12 | VCC_5V | J2 pad 7 — (7.62, −30.38) | OLED pad 2 — (−27.27, −36) | **F.Cu, 0.5 mm wide**, runs across the top |
 
-**GND** (XIAO J2 pad 5 → OLED J3 pad 1 → encoder C, S2) is **already connected**
-through the B.Cu GND pour's thermal reliefs — no manual route needed.
+**GND** (XIAO J2 pad 5 → OLED J3 pad 1 → encoder C) connects automatically
+through the B.Cu GND pour's thermal reliefs.
 
 ### Tips
 
 - The XIAO header pads are THT, so you can start a B.Cu trace right at the
   pad without a via — the pad already exists on both layers.
-- The COL fanout (rows 1–2) and SDA/SCL lanes are all in the empty space
-  between the XIAO header (bottom of XIAO body at Y = −17.38) and the matrix
-  top (COL trunk top at Y = −6.525). That's ~10 mm of clear F.Cu space.
-- For ENC_A and ENC_B, route them parallel on F.Cu — they only carry quadrature
-  pulses, no signal-integrity concerns.
-
-### Optional RGB
-
-XIAO D10 (right pin 1, RGB_DIN net) is left unconnected on the PCB. If you
-want underglow, solder thin wires from that pad to SK6812 MINI-E LEDs on the
-underside of the case. Per-LED wiring:
-
-```
-XIAO D10 ──► DIN of LED1
-              VDD (LED1) → 5V
-              GND (LED1) → GND
-              DOUT (LED1) ──► DIN (LED2)
-              ...
-```
-
-The KMK firmware (`firmware/main.py`) does not enable RGB by default — uncomment
-the `kmk.extensions.peg_rgb_matrix` import + setup if you wire them.
+- All COL fanout traces (1–4) live in the F.Cu space between the XIAO bottom
+  (Y ≈ −30) and the COL trunk tops (Y = −9). That's ~20 mm of clear lane;
+  pick a separate Y lane per column to keep them parallel.
+- ROW1 and ROW2 should use the right gutter (around X = 40–42, between the
+  matrix's right edge at X ≈ 35 and the right mounting hole at X = 42).
+- Place ENC_A and ENC_B on F.Cu before routing the VCC_5V trace — VCC_5V
+  is fatter (0.5 mm) and will block them otherwise.
 
 ## After routing
 
 ```bash
 # In KiCad GUI:
-#   Inspect > Design Rules Checker > Run DRC (should be 0 errors, 0 unconnected)
+#   Inspect > Design Rules Checker > Run DRC (0 errors, 0 unconnected)
 #   File > Fabrication Outputs > Gerbers... → output to a fresh folder
 #   File > Fabrication Outputs > Drill Files... → same folder
 #   zip the .gbr + .drl files as gerbers.zip → drop in production/
 
-# OR from the CLI (replace the bundled gerbers):
+# OR from the CLI (replaces production/gerbers.zip):
 mkdir -p /tmp/gerbers && \
   /Applications/KiCad.app/Contents/MacOS/kicad-cli pcb export gerbers \
     --output /tmp/gerbers/ \

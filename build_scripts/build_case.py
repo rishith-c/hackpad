@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Build the Hackpad 3D-printed case using cadquery.
+"""Build the Hackpad 3D-printed case + screw hardware using cadquery.
 
-Two parts:
-  - top.step / top.stl  : switch-plate (5mm) with 14x14mm MX cutouts,
-                          encoder shaft hole, OLED window, XIAO USB-C
-                          slot in the side wall.
-  - bottom.step / bottom.stl: tray (8mm) with M3 heatset insert bosses,
-                              PCB rest ledge, screw holes.
+Parts produced:
+  - production/Top.step / .stl    : top switch-plate (5mm) with 12 MX cutouts,
+                                    encoder shaft hole, OLED window, XIAO
+                                    inspection window, M3 screw clearance.
+  - production/Bottom.step / .stl : bottom tray (8mm) with PCB rest ledge,
+                                    4x M3 heatset insert bosses, USB-C side cutout.
+  - production/M3x16_Screw.step / .stl : single M3x16 mm SHCS hardware model
+                                         (one file, used 4x in the assembly).
+  - production/HeatsetInsert_M3x5x4.step / .stl : single brass heatset insert
+                                                   hardware model (one file, used 4x).
+  - cad/assembled-model.step / .stl : full assembled CAD model (top + bottom +
+                                       PCB + 4 screws + 4 inserts).
 
-Plus an assembled-model.step that combines both halves with a simplified
-PCB representation in between - this is the file Hack Club's submission
-expects in cad/.
+All hardware is generated parametrically — re-running this script reproduces
+every file byte-for-byte.
 """
 
 import os
@@ -21,206 +26,234 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 PROD_DIR = os.path.join(ROOT, "production")
 CAD_DIR = os.path.join(ROOT, "cad")
 
-# ---- dimensions (mm) ----
-PCB_W = 90.0
-PCB_H = 70.0
+# ---- dimensions (mm) — must match build_pcb.py ---
+PCB_W = 95.0
+PCB_H = 95.0
 PCB_THK = 1.6
 CASE_WALL = 2.0
-CASE_W = PCB_W + 2 * CASE_WALL          # = 94
-CASE_H = PCB_H + 2 * CASE_WALL          # = 74
+CASE_W = PCB_W + 2 * CASE_WALL          # 99
+CASE_H = PCB_H + 2 * CASE_WALL          # 99
 TOP_THK = 5.0
 BOTTOM_THK = 8.0
-PCB_REST_THK = 2.0                       # ledge thickness under PCB
+PCB_REST_THK = 2.0
 CORNER_R = 3.0
 
-# Switch parameters
-MX_CUT = 14.0                            # 14x14 hole per switch
+# Matrix
+MX_CUT = 14.0
 SW_PITCH = 19.05
-SW_CENTER_X = -22.0                      # board coords (origin = board center)
-SW_CENTER_Y = 5.0
-SW_X = [SW_CENTER_X - SW_PITCH / 2, SW_CENTER_X + SW_PITCH / 2]
-SW_Y = [SW_CENTER_Y - SW_PITCH / 2, SW_CENTER_Y + SW_PITCH / 2]
+SW_X = [-28.575, -9.525, 9.525, 28.575]   # 4 cols
+SW_Y = [-7.0, 12.05, 31.1]                # 3 rows
 
-# Encoder shaft (EC11): ~7mm threaded bushing
-ENC_X = 22.0
-ENC_Y = 14.0
+# Other top-side cutouts
+ENC_X, ENC_Y = 30.0, -28.0
 ENC_BUSHING_D = 7.5
 
-# OLED window (visible area through cutout): 22mm x 6mm
-OLED_X = 24.0
-OLED_Y = -25.0
+OLED_X, OLED_Y = -26.0, -36.0
 OLED_WIN_W = 22.0
 OLED_WIN_H = 6.0
 
-# XIAO USB-C cutout in top of case (USB at the top board edge, Y=-35 in board coords)
+# XIAO inspection window
+XIAO_INSPECT_X = 0.0
+XIAO_INSPECT_Y = -38.0
+XIAO_INSPECT_W = 22.0
+XIAO_INSPECT_H = 20.0
+
+# Mounting holes
+MOUNT_HOLES = [(-42.0, -42.0), (42.0, -42.0), (42.0, 42.0), (-42.0, 42.0)]
+M3_INSERT_OD = 4.2       # heatset insert OD (kit: 4.0)
+M3_BOSS_OD = 6.5
+M3_BOSS_H = 5.0
+M3_SCREW_HEAD_D = 5.5    # SHCS head diameter
+M3_SCREW_HEAD_H = 3.0
+M3_SCREW_SHAFT_D = 3.0
+M3_SCREW_LEN = 16.0      # M3x16 from kit
+M3_CLEARANCE = 3.2       # screw clearance hole in top plate
+
+# USB-C
 XIAO_USB_W = 10.0
-XIAO_USB_H = 4.0     # roughly USB-C connector depth
-
-# Mounting holes (M3, in PCB coords)
-MOUNT_HOLES = [(-40.0, -30.0), (40.0, -30.0), (40.0, 30.0), (-40.0, 30.0)]
-M3_INSERT_D = 4.2     # M3x5x4 heatset insert ~4.2mm OD
-M3_BOSS_OD = 6.5      # boss outer diameter for inserts
-M3_BOSS_H = 5.0       # boss height in bottom tray
-M3_SCREW_D = 3.2      # M3 screw clearance
+XIAO_USB_H = 4.0
 
 
-def rounded_rect_plate(w, h, thk, r):
-    """A rounded rectangular plate of the given outer dimensions."""
-    return cq.Workplane("XY").rect(w, h).workplane().tag("base") \
-        .center(0, 0).rect(w, h).extrude(0).end() \
-        .moveTo(0, 0)._tag_select_first("base") if False else \
-        cq.Workplane("XY").box(w, h, thk).edges("|Z").fillet(r)
-
-
+# =============================================================
+# Top plate
+# =============================================================
 def build_top():
-    """Top plate: cutouts for switches, encoder shaft, OLED window."""
     plate = cq.Workplane("XY").box(CASE_W, CASE_H, TOP_THK).edges("|Z").fillet(CORNER_R)
 
-    # MX switch cutouts (centered on each switch position in board coords)
+    # MX switch cutouts
     for sy in SW_Y:
         for sx in SW_X:
-            plate = (plate
-                     .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-                     .center(sx, sy)
-                     .rect(MX_CUT, MX_CUT)
-                     .cutThruAll())
+            plate = (plate.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+                     .center(sx, sy).rect(MX_CUT, MX_CUT).cutThruAll())
 
     # Encoder shaft hole
-    plate = (plate
-             .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-             .center(ENC_X, ENC_Y)
-             .circle(ENC_BUSHING_D / 2.0)
-             .cutThruAll())
+    plate = (plate.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+             .center(ENC_X, ENC_Y).circle(ENC_BUSHING_D / 2.0).cutThruAll())
 
     # OLED window
-    plate = (plate
-             .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-             .center(OLED_X, OLED_Y)
-             .rect(OLED_WIN_W, OLED_WIN_H)
-             .cutThruAll())
+    plate = (plate.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+             .center(OLED_X, OLED_Y).rect(OLED_WIN_W, OLED_WIN_H).cutThruAll())
 
-    # XIAO inspection window so the user can see the USB-C
-    plate = (plate
-             .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-             .center(0.0, -25.0)
-             .rect(20.0, 18.0)
-             .cutThruAll())
+    # XIAO inspection window (see USB-C connector + USB connection LED)
+    plate = (plate.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+             .center(XIAO_INSPECT_X, XIAO_INSPECT_Y)
+             .rect(XIAO_INSPECT_W, XIAO_INSPECT_H).cutThruAll())
 
-    # M3 screw clearance holes through top
+    # M3 screw clearance through top
     for (mx, my) in MOUNT_HOLES:
-        plate = (plate
-                 .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-                 .center(mx, my)
-                 .circle(M3_SCREW_D / 2.0)
-                 .cutThruAll())
+        plate = (plate.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+                 .center(mx, my).circle(M3_CLEARANCE / 2.0).cutThruAll())
     return plate
 
 
+# =============================================================
+# Bottom tray
+# =============================================================
 def build_bottom():
-    """Bottom tray: walls + PCB rest ledge + M3 heatset bosses + side cutout for USB-C."""
-    # Solid block first
     tray = cq.Workplane("XY").box(CASE_W, CASE_H, BOTTOM_THK).edges("|Z").fillet(CORNER_R)
 
-    # Hollow out the interior to leave PCB_REST_THK at the bottom + walls.
+    # Hollow interior (PCB pocket)
     pocket_w = CASE_W - 2 * CASE_WALL
     pocket_h = CASE_H - 2 * CASE_WALL
     pocket_d = BOTTOM_THK - PCB_REST_THK
-    tray = (tray
-            .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-            .rect(pocket_w, pocket_h)
-            .cutBlind(-pocket_d))
+    tray = (tray.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+            .rect(pocket_w, pocket_h).cutBlind(-pocket_d))
 
-    # M3 heatset insert bosses (cylinders standing up from the pocket floor).
-    # Add the boss as a separate cylinder UNION'd into the tray, then drill the
-    # insert hole.
+    # M3 heatset insert bosses (cylinders standing up from pocket floor)
     for (mx, my) in MOUNT_HOLES:
-        # Cylinder centered at (mx, my) on the pocket floor.
-        # Pocket floor Z is at (BOTTOM_THK/2 - pocket_d) = (4 - 6) = -2 from
-        # tray center. We use absolute Z.
-        # Easier: just build a boss at the right XYZ and union with tray.
         boss = (cq.Workplane("XY")
                 .workplane(offset=-BOTTOM_THK / 2 + PCB_REST_THK)
-                .center(mx, my)
-                .circle(M3_BOSS_OD / 2.0)
-                .extrude(M3_BOSS_H))
+                .center(mx, my).circle(M3_BOSS_OD / 2.0).extrude(M3_BOSS_H))
         tray = tray.union(boss)
-        # Drill the insert hole (slightly undersized, insert melts in).
-        tray = (tray
-                .faces(">Z").workplane(centerOption="CenterOfBoundBox")
-                .center(mx, my)
-                .circle(M3_INSERT_D / 2.0)
-                .cutBlind(-M3_BOSS_H))
+        tray = (tray.faces(">Z").workplane(centerOption="CenterOfBoundBox")
+                .center(mx, my).circle(M3_INSERT_OD / 2.0).cutBlind(-M3_BOSS_H))
 
-    # USB-C side cutout: notch the wall closest to Y = -CASE_H/2 (top edge of
-    # the board in our convention). XIAO USB-C sits at board Y = -35 roughly,
-    # which is the BOTTOM Y of the board (Y less = top of board visually,
-    # but our board coords have origin at center and USB-C in our PCB layout
-    # is at Y = ~-32.6). The case wall on the -Y side needs a notch.
-    tray = (tray
-            .faces("<Y").workplane(centerOption="CenterOfBoundBox")
-            .center(0, 0)
-            .rect(XIAO_USB_W, XIAO_USB_H * 2)
+    # USB-C cutout in side wall
+    tray = (tray.faces("<Y").workplane(centerOption="CenterOfBoundBox")
+            .center(0, 0).rect(XIAO_USB_W, XIAO_USB_H * 2)
             .cutBlind(-CASE_WALL - 0.5))
 
     return tray
 
 
+# =============================================================
+# Hardware: M3x16 SHCS screw
+# =============================================================
+def build_m3_screw():
+    """Simplified socket-head cap screw: cylindrical head + threaded shaft.
+
+    Single canonical model — the assembly places 4 copies. Real screws
+    have hex sockets and threads; this is a clean stand-in for visualization
+    and packing checks. Not a STEP file you'd machine from; the screw is
+    purchased hardware (or comes in the Hackpad kit).
+    """
+    screw = (cq.Workplane("XY")
+             .circle(M3_SCREW_SHAFT_D / 2.0)
+             .extrude(M3_SCREW_LEN))
+    head = (cq.Workplane("XY")
+            .workplane(offset=M3_SCREW_LEN)
+            .circle(M3_SCREW_HEAD_D / 2.0)
+            .extrude(M3_SCREW_HEAD_H))
+    return screw.union(head)
+
+
+# =============================================================
+# Hardware: M3 x 5 x 4 brass heatset insert
+# =============================================================
+def build_heatset_insert():
+    """Brass heatset insert: hollow cylinder with knurled OD (simplified)."""
+    od = 4.0
+    id_ = 2.5
+    length = 5.0
+    body = (cq.Workplane("XY").circle(od / 2.0).extrude(length))
+    bore = (cq.Workplane("XY").circle(id_ / 2.0).extrude(length))
+    return body.cut(bore)
+
+
+# =============================================================
+# PCB stand-in (block)
+# =============================================================
 def build_pcb_dummy():
-    """Simplified PCB block for the assembled-model preview only."""
-    pcb = (cq.Workplane("XY")
-           .box(PCB_W, PCB_H, PCB_THK)
-           .edges("|Z").fillet(CORNER_R))
-    return pcb
+    return (cq.Workplane("XY")
+            .box(PCB_W, PCB_H, PCB_THK)
+            .edges("|Z").fillet(CORNER_R))
 
 
 def main():
     os.makedirs(PROD_DIR, exist_ok=True)
     os.makedirs(CAD_DIR, exist_ok=True)
 
-    print("[1] Building top plate...")
+    print("[1] Top plate")
     top = build_top()
-    print("[2] Building bottom tray...")
-    bottom = build_bottom()
-    print("[3] Building PCB dummy...")
+    print("[2] Bottom tray")
+    bot = build_bottom()
+    print("[3] M3 screw")
+    screw = build_m3_screw()
+    print("[4] Heatset insert")
+    insert = build_heatset_insert()
+    print("[5] PCB dummy")
     pcb = build_pcb_dummy()
 
-    # ---- Individual production STLs and STEPs ----
-    top_step = os.path.join(PROD_DIR, "Top.step")
-    bot_step = os.path.join(PROD_DIR, "Bottom.step")
-    top_stl  = os.path.join(PROD_DIR, "Top.stl")
-    bot_stl  = os.path.join(PROD_DIR, "Bottom.stl")
+    # ---- Production parts (per-file) ----
+    parts = [
+        (top,    "Top",                       True),   # 3D-printable
+        (bot,    "Bottom",                    True),   # 3D-printable
+        (screw,  "M3x16_Screw",               False),  # hardware (visualization)
+        (insert, "HeatsetInsert_M3x5x4",      False),  # hardware (visualization)
+    ]
+    for solid, name, _printable in parts:
+        step_path = os.path.join(PROD_DIR, f"{name}.step")
+        stl_path  = os.path.join(PROD_DIR, f"{name}.stl")
+        print(f"[6] Export {step_path}")
+        cq.exporters.export(solid, step_path)
+        print(f"[7] Export {stl_path}")
+        cq.exporters.export(solid, stl_path, tolerance=0.05, angularTolerance=0.1)
 
-    print(f"[4] Export {top_step}")
-    cq.exporters.export(top, top_step)
-    print(f"[5] Export {bot_step}")
-    cq.exporters.export(bottom, bot_step)
-    print(f"[6] Export {top_stl}")
-    cq.exporters.export(top, top_stl)
-    print(f"[7] Export {bot_stl}")
-    cq.exporters.export(bottom, bot_stl)
-
-    # ---- Assembled model in cad/ ----
-    # Stack: bottom tray (Z 0..8) + PCB (Z 8..9.6) + air gap (1mm) + top plate (Z 10.6..15.6)
-    # cadquery centers boxes at origin, so translate accordingly.
-    print("[8] Assembling full model")
-    bottom_pos = bottom.translate((0, 0, BOTTOM_THK / 2))
+    # ---- Assembly ----
+    # Stack heights: bottom tray Z 0..8, PCB Z 8..9.6, top plate Z 10.6..15.6
+    print("[8] Assembling")
+    bottom_pos = bot.translate((0, 0, BOTTOM_THK / 2))
     pcb_pos    = pcb.translate((0, 0, BOTTOM_THK + PCB_THK / 2))
     top_pos    = top.translate((0, 0, BOTTOM_THK + PCB_THK + 1.0 + TOP_THK / 2))
 
-    assembly = cq.Assembly()
-    assembly.add(bottom_pos, name="bottom", color=cq.Color("black"))
-    assembly.add(pcb_pos, name="pcb", color=cq.Color("darkgreen"))
-    assembly.add(top_pos, name="top", color=cq.Color("red"))
+    # Heatset inserts melt into the bottom-tray bosses (top of boss at z = PCB_REST_THK + M3_BOSS_H = 7)
+    inserts = []
+    insert_top_z = PCB_REST_THK + M3_BOSS_H  # boss top in tray frame; tray bottom at z=0 here
+    for (mx, my) in MOUNT_HOLES:
+        # insert occupies last 5mm of boss height, top flush with boss top
+        ins = insert.translate((mx, my, insert_top_z - 5.0))
+        inserts.append(ins)
+
+    # Screws drop through the top plate clearance holes into the heatset
+    # inserts. Head sits flush with the top plate top surface.
+    screws_placed = []
+    top_plate_top_z = BOTTOM_THK + PCB_THK + 1.0 + TOP_THK  # = 15.6
+    for (mx, my) in MOUNT_HOLES:
+        # Screw shaft extends 16mm DOWN from head. Head top at top_plate_top_z.
+        sc = screw.translate((mx, my, top_plate_top_z - M3_SCREW_LEN))
+        screws_placed.append(sc)
+
+    asm = cq.Assembly()
+    asm.add(bottom_pos, name="bottom", color=cq.Color("black"))
+    asm.add(pcb_pos,    name="pcb",    color=cq.Color("darkgreen"))
+    asm.add(top_pos,    name="top",    color=cq.Color("red"))
+    for i, ins in enumerate(inserts, 1):
+        asm.add(ins, name=f"insert{i}", color=cq.Color("goldenrod"))
+    for i, sc in enumerate(screws_placed, 1):
+        asm.add(sc, name=f"screw{i}", color=cq.Color("gray"))
 
     assembled_step = os.path.join(CAD_DIR, "assembled-model.step")
     print(f"[9] Export {assembled_step}")
-    assembly.save(assembled_step)
+    asm.save(assembled_step)
 
-    # Also export an STL of the assembly. cq.Assembly doesn't write STL directly,
-    # so we union the placed solids into a single compound and export that.
+    # Single-mesh STL of the assembly (matplotlib / GitHub render likes this)
     assembled_stl = os.path.join(CAD_DIR, "assembled-model.stl")
     print(f"[10] Export {assembled_stl}")
     combined = bottom_pos.union(pcb_pos).union(top_pos)
+    for ins in inserts:
+        combined = combined.union(ins)
+    for sc in screws_placed:
+        combined = combined.union(sc)
     cq.exporters.export(combined, assembled_stl, tolerance=0.1, angularTolerance=0.1)
 
     print("Done.")
