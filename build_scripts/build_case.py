@@ -216,6 +216,13 @@ def main():
     print(f"[9] Export {assembled_step}")
     assembly.save(assembled_step)
 
+    # Also export an STL of the assembly. cq.Assembly doesn't write STL directly,
+    # so we union the placed solids into a single compound and export that.
+    assembled_stl = os.path.join(CAD_DIR, "assembled-model.stl")
+    print(f"[10] Export {assembled_stl}")
+    combined = bottom_pos.union(pcb_pos).union(top_pos)
+    cq.exporters.export(combined, assembled_stl, tolerance=0.1, angularTolerance=0.1)
+
     print("Done.")
 
 
