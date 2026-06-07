@@ -1,0 +1,17 @@
+net,connection_1,connection_2,notes
+COL0,XIAO_D0_GP26,SW1/SW3 (switch terminal A),matrix column 0 (left)
+COL1,XIAO_D1_GP27,SW2/SW4 (switch terminal A),matrix column 1 (right)
+ROW0,XIAO_D6_GP0,D1/D2 cathodes (SW1+SW2),matrix row 0 (top)
+ROW1,XIAO_D7_GP1,D3/D4 cathodes (SW3+SW4),matrix row 1 (bottom)
+DIODE_SW1,SW1_terminal_B_anode,ROW0_cathode,1N4148 COL2ROW
+DIODE_SW2,SW2_terminal_B_anode,ROW0_cathode,1N4148 COL2ROW
+DIODE_SW3,SW3_terminal_B_anode,ROW1_cathode,1N4148 COL2ROW
+DIODE_SW4,SW4_terminal_B_anode,ROW1_cathode,1N4148 COL2ROW
+ENC_A,XIAO_D2_GP28,EC11_pin_A,encoder phase A
+ENC_B,XIAO_D3_GP29,EC11_pin_B,encoder phase B
+ENC_PUSH,XIAO_D8_GP2,EC11_pin_S1,encoder push-switch (S2 -> GND)
+I2C_SDA,XIAO_D4_GP6,OLED_SDA,I2C1 data
+I2C_SCL,XIAO_D5_GP7,OLED_SCL,I2C1 clock
+RGB_DIN,XIAO_D10_GP3,(hand-wired SK6812 chain),optional underglow off-PCB
+VCC_5V,XIAO_5V_VBUS,OLED_VCC,USB 5V rail
+GND,XIAO_GND,OLED_GND + EC11_C + EC11_S2 + all diode-free switch returns,common ground (auto via B.Cu pour)

@@ -1,0 +1,17 @@
+ref,part,x_mm,y_mm,rotation_deg
+SW1,MX switch (row 0 col 0),-31.525,-4.525,0
+D1,1N4148 diode,-35.335,-9.525,0
+SW2,MX switch (row 0 col 1),-12.475,-4.525,0
+D2,1N4148 diode,-16.285,-9.525,0
+SW3,MX switch (row 1 col 0),-31.525,14.525,0
+D3,1N4148 diode,-35.335,9.525,0
+SW4,MX switch (row 1 col 1),-12.475,14.525,0
+D4,1N4148 diode,-16.285,9.525,0
+J1,XIAO header left (1x07),-7.62,-32.62,0
+J2,XIAO header right (1x07),7.62,-32.62,0
+J3,OLED 4-pin header,20.19,-25,90
+ENC1,EC11 rotary encoder,22,14,0
+MH1,M3 mounting hole,-40,-30,0
+MH2,M3 mounting hole,40,-30,0
+MH3,M3 mounting hole,40,30,0
+MH4,M3 mounting hole,-40,30,0

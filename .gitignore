@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+._*
+
+# KiCad backup / lock / cache files
+*.kicad_prl
+*-backups/
+*.bak
+*~
+fp-info-cache
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Build artifacts
+*.uf2
